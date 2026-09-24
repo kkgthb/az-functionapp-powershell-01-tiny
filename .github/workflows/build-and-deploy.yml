@@ -1,0 +1,111 @@
+name: "Azure Function App CI/CD"
+
+on:
+  # Run this GitHub Action every time someone force-pushes to main
+  # (note:  this will only run when pull-requests into main get approved & closed out
+  #    if main is a branch that has force-push protection enabled).
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+      - "**/README.md" # Ignore READMEs in subdirectories as well
+  workflow_dispatch: {} # TODO:  take this out when done troubleshooting
+
+# Maybe we need id-token: 'write' -- I can't remember -- but
+# https://cheatsheetseries.owasp.org/cheatsheets/GitHub_Actions_Security_Cheat_Sheet.html#minimize-github_token-permissions
+# says to start with {} so that's my new default in demos
+permissions: {}
+
+jobs:
+  build_job:
+    permissions:
+      contents: "read"
+    runs-on: "ubuntu-latest"
+    steps:
+      - id: "checkout"
+        name: "Check out repository"
+        uses: "actions/checkout@v7" # TODO for security:  switch to hashes with a comment indicating the version number
+      - id: "build_executable"
+        name: "Build Azure Functions executable"
+        run: |
+          cp src/web dist
+      - id: "upload_build_artifact"
+        name: 'Upload the just-generated "build artifact" folder into CI/CD-pipeline-specific inter-job artifact storage'
+        uses: "actions/upload-artifact@v7" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          name: "mybuild_GIVE_ME_A_BETTER_NAME"
+          path: "${{ github.workspace }}/dist"
+          if-no-files-found: error
+
+  deploy_to_nonprod_job:
+    needs: "build_job"
+    environment:
+      name: "${{ vars.envpointer_nonprod }}"
+    permissions:
+      actions: "read" # Needed by "actions/download-artifact"
+      id-token: "write" # Needed by "azure/login"
+    runs-on: "ubuntu-latest"
+    steps:
+      - id: "download_built_artifact"
+        name: '1/4: Download the "built artifact" folder from CI/CD-pipeline-specific inter-job artifact storage'
+        uses: "actions/download-artifact@v8" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          run-id: "${{ github.run_id }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          name: "mybuild_GIVE_ME_A_BETTER_NAME"
+          path: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_nonprod_deploy_job"
+      - id: "log_into_azure_nonprod"
+        name: "2/4: Log this GitHub Actions job into the nonprod targeted cloud environment"
+        uses: "azure/login@v3" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          tenant-id: ${{ secrets.ENTRA_TENANT_ID }}
+          client-id: ${{ secrets.ENTRA_CLIENT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+          allow-no-subscriptions: true
+      - id: "deploy_into_nonprod_function_app"
+        name: "3/4: Deploy into the nonprod function app"
+        uses: "Azure/functions-action@v1" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          app-name: "${{ secrets.AZURE_FUNCTIONAPP_NAME }}"
+          package: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_nonprod_deploy_job"
+      - id: "log_out_of_azure_nonprod"
+        name: "4/4: Log the Azure CLI out of the nonprod targeted cloud environment"
+        run: "az logout" # TODO:  is this necessary?  If so, do I need to manually log out Azure Powershell, too?
+
+  deploy_to_prod_job:
+    needs: "deploy_to_nonprod_job"
+    environment:
+      name: "${{ vars.envpointer_prod }}"
+    permissions:
+      actions: "read" # Needed by "actions/download-artifact"
+      id-token: "write" # Needed by "azure/login"
+    runs-on: "ubuntu-latest"
+    steps:
+      - id: "download_built_artifact"
+        name: '1/4: Download the "built artifact" folder from CI/CD-pipeline-specific inter-job artifact storage'
+        uses: "actions/download-artifact@v8" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          run-id: "${{ github.run_id }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          name: "mybuild_GIVE_ME_A_BETTER_NAME"
+          path: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_prod_deploy_job"
+      - id: "log_into_azure_prod"
+        name: "2/4: Log this GitHub Actions job into the prod targeted cloud environment"
+        uses: "azure/login@v3" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          tenant-id: ${{ secrets.ENTRA_TENANT_ID }}
+          client-id: ${{ secrets.ENTRA_CLIENT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+          allow-no-subscriptions: true
+      - id: "deploy_into_prod_function_app"
+        name: "3/4: Deploy into the prod function app"
+        uses: "Azure/functions-action@v1" # TODO for security:  switch to hashes with a comment indicating the version number
+        with:
+          app-name: "${{ secrets.AZURE_FUNCTIONAPP_NAME }}"
+          package: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_prod_deploy_job"
+      - id: "log_out_of_azure_prod"
+        name: "4/4: Log the Azure CLI out of the prod targeted cloud environment"
+        run: "az logout" # TODO:  is this necessary?  If so, do I need to manually log out Azure Powershell, too?

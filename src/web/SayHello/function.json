@@ -1,0 +1,19 @@
+{
+    "scriptFile": "../helpers/SayHelloHelpers/SayHelloActualRunner.ps1",
+    "bindings": [
+        {
+            "type": "httpTrigger",
+            "direction": "in",
+            "name": "Request",
+            "methods": [
+                "get"
+            ],
+            "authLevel": "anonymous"
+        },
+        {
+            "type": "http",
+            "direction": "out",
+            "name": "Response"
+        }
+    ]
+}
