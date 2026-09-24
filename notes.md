@@ -46,3 +46,4 @@
 
 ---
 
+`https://your_azure_function_app_name_here.azurewebsites.net/api/SayHello`

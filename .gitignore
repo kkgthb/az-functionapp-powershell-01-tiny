@@ -14,3 +14,7 @@ terraform.tfstate.backup
 
 # Ignore local settings for Azure Function Apps
 local.settings.json
+
+# Ignore build artifacts
+release.zip
+dist

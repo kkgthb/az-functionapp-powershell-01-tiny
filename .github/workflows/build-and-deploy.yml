@@ -28,6 +28,7 @@ jobs:
         uses: "actions/checkout@v7" # TODO for security:  switch to hashes with a comment indicating the version number
       - id: "build_executable"
         name: "Build Azure Functions executable"
+        working-directory: "${{ github.workspace }}"
         run: |
           cp -r src/web dist
       - id: "upload_build_artifact"
@@ -48,7 +49,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - id: "download_built_artifact"
-        name: '1/4: Download the "built artifact" folder from CI/CD-pipeline-specific inter-job artifact storage'
+        name: '1/5: Download the "built artifact" folder from CI/CD-pipeline-specific inter-job artifact storage'
         uses: "actions/download-artifact@v8" # TODO for security:  switch to hashes with a comment indicating the version number
         with:
           run-id: "${{ github.run_id }}"
@@ -56,7 +57,7 @@ jobs:
           name: "mybuild_GIVE_ME_A_BETTER_NAME"
           path: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_nonprod_deploy_job"
       - id: "log_into_azure_nonprod"
-        name: "2/4: Log this GitHub Actions job into the nonprod targeted cloud environment"
+        name: "2/5: Log this GitHub Actions job into the nonprod targeted cloud environment"
         uses: "azure/login@v3" # TODO for security:  switch to hashes with a comment indicating the version number
         with:
           tenant-id: ${{ secrets.ENTRA_TENANT_ID }}
@@ -64,14 +65,20 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
           allow-no-subscriptions: true
+      - id: "zip_package"
+        name: "3/5: Zip the function app directory"
+        run: |
+          # Change directory to ensure host.json is at the root of the zip archive
+          cd "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_nonprod_deploy_job"
+          zip -r ../release.zip .
       - id: "deploy_into_nonprod_function_app"
-        name: "3/4: Deploy into the nonprod function app"
+        name: "4/5: Deploy into the nonprod function app"
         uses: "Azure/functions-action@v1" # TODO for security:  switch to hashes with a comment indicating the version number
         with:
           app-name: "${{ secrets.AZURE_FUNCTIONAPP_NAME }}"
-          package: "${{ github.workspace }}/folder_where_i_want_the_built_copy_now_in_my_nonprod_deploy_job"
+          package: "${{ github.workspace }}/release.zip"
       - id: "log_out_of_azure_nonprod"
-        name: "4/4: Log the Azure CLI out of the nonprod targeted cloud environment"
+        name: "5/5: Log the Azure CLI out of the nonprod targeted cloud environment"
         run: "az logout" # TODO:  is this necessary?  If so, do I need to manually log out Azure Powershell, too?
 
   deploy_to_prod_job:
