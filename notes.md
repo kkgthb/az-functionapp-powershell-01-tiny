@@ -47,3 +47,7 @@
 ---
 
 `https://your_azure_function_app_name_here.azurewebsites.net/api/SayHello`
+
+---
+
+I left off with this still not working.  Haven't yet tried the LLM's new Terraform code, which "Removed managed-dependency settings, which Flex Consumption doesn’t support. The current requirements.psd1 is empty, so this removes no declared modules. The extension bundle remains."

@@ -146,39 +146,49 @@ resource "azurerm_storage_account" "the_az_sa" {
   shared_access_key_enabled = false
 }
 
+resource "azurerm_storage_container" "the_az_deployment_container" {
+  name                  = "function-deployments"
+  storage_account_id    = azurerm_storage_account.the_az_sa.id
+  container_access_type = "private"
+}
+
 resource "azurerm_service_plan" "the_az_asp" {
   name                = "${var.workload_nickname}asp${var.environment_nickname}${random_string.random_suffix.result}"
   resource_group_name = azurerm_resource_group.the_az_rg.name
   location            = azurerm_resource_group.the_az_rg.location
   os_type             = "Linux"
-  sku_name            = "Y1" # Dynamic Consumption Plan
+  sku_name            = "FC1" # Flex Consumption Plan
 }
 
-resource "azurerm_linux_function_app" "the_az_fa" {
-  name                          = "${var.workload_nickname}fa${var.environment_nickname}${random_string.random_suffix.result}"
-  resource_group_name           = azurerm_resource_group.the_az_rg.name
-  location                      = azurerm_resource_group.the_az_rg.location
-  service_plan_id               = azurerm_service_plan.the_az_asp.id
-  storage_account_name          = azurerm_storage_account.the_az_sa.name
-  storage_uses_managed_identity = true
+resource "azurerm_function_app_flex_consumption" "the_az_fa" {
+  name                = "${var.workload_nickname}fa${var.environment_nickname}${random_string.random_suffix.result}"
+  resource_group_name = azurerm_resource_group.the_az_rg.name
+  location            = azurerm_resource_group.the_az_rg.location
+  service_plan_id     = azurerm_service_plan.the_az_asp.id
+
+  storage_container_type      = "blobContainer"
+  storage_container_endpoint  = "${azurerm_storage_account.the_az_sa.primary_blob_endpoint}${azurerm_storage_container.the_az_deployment_container.name}"
+  storage_authentication_type = "SystemAssignedIdentity"
+  runtime_name                = "powershell"
+  runtime_version             = "7.4"
+  maximum_instance_count      = 200
+  instance_memory_in_mb       = 2048
+
   identity {
     type = "SystemAssigned"
   }
-  site_config {
-    application_stack {
-      powershell_core_version = "7.4"
-    }
-  }
+
+  site_config {}
+
   app_settings = {
-    FUNCTIONS_WORKER_RUNTIME           = "powershell"
-    "AzureWebJobsStorage__accountName" = azurerm_storage_account.the_az_sa.name # Points host connection string replacement to the identity endpoint
-    "managedDependencyEnabled"         = "true"                                 # Enables automatic management of dependent modules (like Az modules) via requirements.psd1
+    "AzureWebJobsStorage"              = ""
+    "AzureWebJobsStorage__accountName" = azurerm_storage_account.the_az_sa.name
   }
 }
 
 # This Azure RBAC Role Assignment grants the Entra Service Principal (used by GitHub Actions) permissions to deploy into the Azure Function App.
 resource "azurerm_role_assignment" "cicd_az_rbacra_wc" {
-  scope                = azurerm_linux_function_app.the_az_fa.id
+  scope                = azurerm_function_app_flex_consumption.the_az_fa.id
   role_definition_name = "Website Contributor"
   principal_id         = azuread_service_principal.the_entra_sp.object_id
 }
@@ -194,28 +204,28 @@ resource "azurerm_role_assignment" "cicd_az_rbacra_bdc" {
 resource "azurerm_role_assignment" "functostor_az_rbacra_bdo" {
   scope                = azurerm_storage_account.the_az_sa.id
   role_definition_name = "Storage Blob Data Owner"
-  principal_id         = azurerm_linux_function_app.the_az_fa.identity[0].principal_id
+  principal_id         = azurerm_function_app_flex_consumption.the_az_fa.identity[0].principal_id
 }
 
 # TODO:  validate if this is right.  LLM-generated.
 resource "azurerm_role_assignment" "functostor_az_rbacra_sac" {
   scope                = azurerm_storage_account.the_az_sa.id
   role_definition_name = "Storage Account Contributor"
-  principal_id         = azurerm_linux_function_app.the_az_fa.identity[0].principal_id
+  principal_id         = azurerm_function_app_flex_consumption.the_az_fa.identity[0].principal_id
 }
 
 # TODO:  validate if this is right.  LLM-generated.
 resource "azurerm_role_assignment" "functostor_az_rbacra_qdc" {
   scope                = azurerm_storage_account.the_az_sa.id
   role_definition_name = "Storage Queue Data Contributor"
-  principal_id         = azurerm_linux_function_app.the_az_fa.identity[0].principal_id
+  principal_id         = azurerm_function_app_flex_consumption.the_az_fa.identity[0].principal_id
 }
 
 # TODO:  validate if this is right.  LLM-generated.
 resource "azurerm_role_assignment" "functostor_az_rbacra_tdc" {
   scope                = azurerm_storage_account.the_az_sa.id
   role_definition_name = "Storage Table Data Contributor"
-  principal_id         = azurerm_linux_function_app.the_az_fa.identity[0].principal_id
+  principal_id         = azurerm_function_app_flex_consumption.the_az_fa.identity[0].principal_id
 }
 
 # ----------------------------------
@@ -226,6 +236,6 @@ resource "github_actions_environment_secret" "gh_env_secret_azure_functionapp_na
   repository  = github_repository_environment.the_gh_env.repository
   environment = github_repository_environment.the_gh_env.environment
   secret_name = "AZURE_FUNCTIONAPP_NAME"
-  value       = azurerm_linux_function_app.the_az_fa.name
+  value       = azurerm_function_app_flex_consumption.the_az_fa.name
 }
 

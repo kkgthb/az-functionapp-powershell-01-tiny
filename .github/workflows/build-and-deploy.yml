@@ -4,12 +4,13 @@ on:
   # Run this GitHub Action every time someone force-pushes to main
   # (note:  this will only run when pull-requests into main get approved & closed out
   #    if main is a branch that has force-push protection enabled).
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "README.md"
-      - "**/README.md" # Ignore READMEs in subdirectories as well
+  # TODO:  uncomment when ready to try again
+  # push:
+  #   branches:
+  #     - main
+  #   paths-ignore:
+  #     - "README.md"
+  #     - "**/README.md" # Ignore READMEs in subdirectories as well
   workflow_dispatch: {} # TODO:  take this out when done troubleshooting
 
 # Maybe we need id-token: 'write' -- I can't remember -- but
