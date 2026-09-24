@@ -1,5 +1,4 @@
 {
-    "scriptFile": "../helpers/SayHelloHelpers/SayHelloActualRunner.ps1",
     "bindings": [
         {
             "type": "httpTrigger",
